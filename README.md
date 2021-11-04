@@ -1,20 +1,45 @@
 # short-url-service
-This is an internet service to shorten URLs like bit.ly or TinyURL (just the service, without a GUI). 
 
-The following functionality should be provided:
+This is an internet service to shorten URLs like bit.ly or TinyURL (just the service, without a GUI)
+.
 
-- Users can enter a URL on a page and get back a shortened version. The shortened version of a URL is the same for every shortening request. If this shortened URL is used as an address in a browser, the document of the unabridged URL is displayed after being redirected via the Internet service.
+Users can enter a URL on a page and get back a shortened version. The shortened version of a URL is
+the same for every shortening request. If this shortened URL is used as an address in a browser, the
+document of the unabridged URL is displayed after being redirected via the Internet service.
 
-- Statistics are kept for each shortened URL:
+## Usage of the service
 
-  How often was the URL shortened? 
+### Short url
 
-  How often was the shortened URL accessed? 
+User can use a POST request to generate a new short URL:
 
-  Anyone can see the statistics. It should also be displayed automatically after each shortening.
+POST BASE_URL/short-url/generate
 
-- Variation (Please do not implement, let’s talk about what changes you would do to provide the functionality):
+The body must be in JSON format and contains the `url` parameter.
 
-  Optionally users can log in. Then a shortening will provide a separate URL for each user. In addition to the previous statistics, the calls per user are then counted.
+### Call the short url
 
-  Only logged in users can see statistics. This should be an incentive to sign up. You can login as admin and will see all statistics.
+User just need to enter the returned shorted url in the browser to call the url. Please take care,
+that the parameter BASE_URL in AWS SSM already configured after deployment to AWS.
+
+### GET statistic
+
+User can use a POST request to generate a new short URL:
+
+POST BASE_URL/short-url/get-statistic
+
+The body must be in JSON format and contains the `url` parameter.
+
+
+## Architecture and Deployment
+
+This project using AWS SAM CLI to deploy the codes to AWS.
+
+Please take a look on these documentations to have more overview about AWS SAM CLI
+
+To use the SAM CLI, you need the following tools.
+
+* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
+* Node.js - [Install Node.js 10](https://nodejs.org/en/), including the NPM package management tool.
+* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
+
