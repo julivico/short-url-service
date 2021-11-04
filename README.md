@@ -13,7 +13,7 @@ document of the unabridged URL is displayed after being redirected via the Inter
 
 User can use a POST request to generate a new short URL:
 
-POST BASE_URL/short-url/generate
+POST `[BASE_URL]/short-url/generate`
 
 The body must be in JSON format and contains the `url` parameter.
 
@@ -26,7 +26,7 @@ that the parameter BASE_URL in AWS SSM already configured after deployment to AW
 
 User can use a POST request to generate a new short URL:
 
-POST BASE_URL/short-url/get-statistic
+POST `[BASE_URL]/short-url/get-statistic`
 
 The body must be in JSON format and contains the `url` parameter.
 
