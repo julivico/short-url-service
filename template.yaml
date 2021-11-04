@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  short-url-service
+
+  Short url service
+
+Globals:
+  Function:
+    Runtime: nodejs14.x
+    MemorySize: 128
+    Timeout: 120
+    Environment:
+      Variables:
+        ENV: 'dev'
+        APP_CONFIG_PATH: 'shortUrlService'
+
+Resources:
+
+  APIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Dev
+      Cors:
+        AllowMethods: "'GET, POST'"
+        AllowHeaders: "'access-control-allow-origin,authorization,content-type'"
+        AllowOrigin: "'*'"
+
+  SimpleParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '/dev/shortUrlService/appConfig'
+      Description: 'Configuration for short url service (dev environment)'
+      Type: String
+      Value: '{"ORIGINAL_URL_PREFIX": "OU", "SHORT_URL_KEY_PREFIX": "SU", "MAX_RETRIES": 10, "BASE_URL": "Please configured the Base URL"}'
+
+  ParseShortUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/functions/parse-short-url/app.handler
+      Description:
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ShortUrlTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ShortUrlHistoryQueue.QueueName
+        - SSMParameterReadPolicy:
+            ParameterName: "*"
+      Events:
+        GenerateShortUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref APIGateway
+            Path: /{shortUrlKey}
+            Method: GET
+
+  GetShortUrlInfoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/functions/get-short-url/app.handler
+      Description:
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ShortUrlTable
+        - SSMParameterReadPolicy:
+            ParameterName: "*"
+      Events:
+        GetShortUrlInfoByOriginalUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref APIGateway
+            Path: /short-url/get-statistic
+            Method: POST
+
+  GenerateShortUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/functions/generate-short-url/app.handler
+      Description:
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ShortUrlTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ShortUrlHistoryQueue.QueueName
+        - SSMParameterReadPolicy:
+            ParameterName: "*"
+      Events:
+        GenerateShortUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref APIGateway
+            Path: /short-url/generate
+            Method: POST
+
+  ProcessShortUrlHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/functions/process-short-url-history/app.handler
+      Description: take history, write in the db and update the statistic (if no error by writing into db)
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ShortUrlTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ShortUrlHistoryTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ShortUrlHistoryQueue.QueueName
+        - SSMParameterReadPolicy:
+            ParameterName: "*"
+
+  ### -> Message queue
+  ShortUrlHistoryEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !GetAtt ShortUrlHistoryQueue.Arn
+      FunctionName: !GetAtt ProcessShortUrlHistoryFunction.Arn
+
+  ShortUrlHistoryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ShortUrlHistoryQueue
+      DelaySeconds: 0
+      VisibilityTimeout: 900
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ShortUrlHistoryDeadLetterQueue.Arn
+        maxReceiveCount: 2
+
+  ShortUrlHistoryDeadLetterQueue:
+    Type: AWS::SQS::Queue
+  ### <- Message queue
+
+  ### -> DynamoDB
+  ShortUrlTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: DEVShortUrls
+
+  ShortUrlHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: actionAndTimestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: actionAndTimestamp
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: DEVShortUrlHistories
+  ### <- DynamoDB
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for Dev stage"
+    Value: !Sub "https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/Dev/"
